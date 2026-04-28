@@ -6,6 +6,5 @@ public class AppointmentListDto
     public DateTime AppointmentDate { get; set; }
     public string Status { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
-    public string? InternalNotes { get; set; } = string.Empty;
     public string PatientFullName { get; set; } = string.Empty;
 }
