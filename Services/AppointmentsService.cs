@@ -2,9 +2,9 @@ using System.Text;
 using WebApplication1.DTOs;
 using Microsoft.Data.SqlClient;
 
-namespace WebApplication1;
+namespace WebApplication1.Services;
 
-public class AppointmentsService(IConfiguration configuration) : IAppointmentService
+public class AppointmentsService(IConfiguration configuration) : IAppointmentsService
 {
     public async Task<IEnumerable<AppointmentListDto>> GetAllAsync(CancellationToken cancellationToken)
     {
@@ -22,7 +22,7 @@ public class AppointmentsService(IConfiguration configuration) : IAppointmentSer
         command.Connection = connection;
         command.CommandText = sqlCommand.ToString();
 
-        connection.OpenAsync(cancellationToken);
+        await connection.OpenAsync(cancellationToken);
         
         var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
