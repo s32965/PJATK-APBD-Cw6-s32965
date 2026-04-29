@@ -12,6 +12,7 @@ public class AppointmentDetailsDto
     public int IdDoctor { get; set; }
     public string PatientFirstName { get; set; } = string.Empty;
     public string PatientLastName { get; set; } = string.Empty;
+    public string PatientEmail { get; set; } = string.Empty;
     public string DoctorFirstName { get; set; } = string.Empty;
     public string DoctorLastName { get; set; } = string.Empty;
     public string DoctorSpecializationName { get; set; } = string.Empty;

@@ -6,4 +6,6 @@ public interface IAppointmentsService
 {
     Task<IEnumerable<AppointmentListDto>> GetAllAsync(string? patientLastName, string? status,
         CancellationToken cancellationToken);
+
+    Task<AppointmentDetailsDto> GetByIdAsync(int id, CancellationToken cancellationToken);
 }
