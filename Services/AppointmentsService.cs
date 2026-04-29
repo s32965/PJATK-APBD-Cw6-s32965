@@ -427,4 +427,58 @@ public class AppointmentsService(IConfiguration configuration) : IAppointmentsSe
             throw;
         }
     }
+
+    public async Task DeleteAsync(int id, CancellationToken cancellationToken)
+    {
+        await using var connection = new SqlConnection(configuration.GetConnectionString("Default"));
+        await using var command = new SqlCommand();
+
+        await connection.OpenAsync(cancellationToken);
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        command.Connection = connection;
+        command.Transaction = (SqlTransaction)transaction;
+
+        try
+        {
+            command.CommandText = """
+                                  SELECT Status 
+                                  FROM ClinicAdoNet.dbo.Appointments 
+                                  WHERE IdAppointment = @IdAppointment
+                                  """;
+            command.Parameters.AddWithValue("@IdAppointment", id);
+
+            await using var appointmentReader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await appointmentReader.ReadAsync(cancellationToken))
+            {
+                throw new AppointmentNotFoundException($"Appointment with id: {id} not found");
+            }
+
+            string appointmentStatus = appointmentReader.GetString(appointmentReader.GetOrdinal("Status"));
+
+            if (appointmentStatus == "Completed")
+            {
+                throw new AppointmentAlreadyCompletedException("Appointment already completed");
+            }
+
+            await appointmentReader.CloseAsync();
+            command.Parameters.Clear();
+
+            command.CommandText = """
+                                  DELETE FROM ClinicAdoNet.dbo.Appointments 
+                                  WHERE IdAppointment = @IdAppointment
+                                  """;
+            command.Parameters.AddWithValue("@IdAppointment", id);
+
+            var appointmentId = await command.ExecuteNonQueryAsync(cancellationToken);
+            command.Parameters.Clear();
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (Exception)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
 }

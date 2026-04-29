@@ -136,4 +136,26 @@ public class AppointmentsController(IAppointmentsService appointmentsService) : 
             return Problem("Internal server error");
         }
     }
+    
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteAppointment([FromRoute] int id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await appointmentsService.DeleteAsync(id, cancellationToken);
+            return NoContent();
+        }
+        catch (AppointmentNotFoundException e)
+        {
+            return NotFound(e.Message);
+        }
+        catch (AppointmentAlreadyCompletedException e)
+        {
+            return Conflict(e.Message);
+        }
+        catch (Exception)
+        {
+            return Problem("Internal server error");
+        }
+    }
 }
