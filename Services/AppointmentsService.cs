@@ -7,7 +7,8 @@ namespace WebApplication1.Services;
 
 public class AppointmentsService(IConfiguration configuration) : IAppointmentsService
 {
-    public async Task<IEnumerable<AppointmentListDto>> GetAllAsync(string? patientLastName, string? status, CancellationToken cancellationToken)
+    public async Task<IEnumerable<AppointmentListDto>> GetAllAsync(string? patientLastName, string? status,
+        CancellationToken cancellationToken)
     {
         var result = new List<AppointmentListDto>();
 
@@ -36,16 +37,16 @@ public class AppointmentsService(IConfiguration configuration) : IAppointmentsSe
             sqlCommand.Append(" WHERE ");
             sqlCommand.Append(string.Join(" AND ", conditions));
         }
-        
+
         await using var connection = new SqlConnection(configuration.GetConnectionString("Default"));
         await using var command = new SqlCommand();
-        
+
         command.Connection = connection;
         command.CommandText = sqlCommand.ToString();
         command.Parameters.AddRange(parameters.ToArray());
 
         await connection.OpenAsync(cancellationToken);
-        
+
         var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -58,7 +59,7 @@ public class AppointmentsService(IConfiguration configuration) : IAppointmentsSe
                 PatientFullName = reader.GetString(reader.GetOrdinal("PatientFullName"))
             });
         }
-        
+
         return result;
     }
 
@@ -88,16 +89,16 @@ public class AppointmentsService(IConfiguration configuration) : IAppointmentsSe
                                            JOIN ClinicAdoNet.dbo.Specializations S ON D.IdSpecialization = S.IdSpecialization
                                            WHERE A.IdAppointment = @id
                                            """);
-        
+
         await using var connection = new SqlConnection(configuration.GetConnectionString("Default"));
         await using var command = new SqlCommand();
-        
+
         command.Connection = connection;
         command.CommandText = sqlCommand.ToString();
         command.Parameters.AddWithValue("@id", id);
 
         await connection.OpenAsync(cancellationToken);
-        
+
         var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -113,7 +114,7 @@ public class AppointmentsService(IConfiguration configuration) : IAppointmentsSe
                 IdDoctor = reader.GetInt32(reader.GetOrdinal("IdDoctor")),
                 PatientFirstName = reader.GetString(reader.GetOrdinal("PatientFirstName")),
                 PatientLastName = reader.GetString(reader.GetOrdinal("PatientLastName")),
-                PatientEmail =  reader.GetString(reader.GetOrdinal("PatientEmail")),
+                PatientEmail = reader.GetString(reader.GetOrdinal("PatientEmail")),
                 DoctorFirstName = reader.GetString(reader.GetOrdinal("DoctorFirstName")),
                 DoctorLastName = reader.GetString(reader.GetOrdinal("DoctorLastName")),
                 DoctorSpecializationName = reader.GetString(reader.GetOrdinal("SpecializationName")),
@@ -124,7 +125,7 @@ public class AppointmentsService(IConfiguration configuration) : IAppointmentsSe
         {
             throw new NotFoundException($"Appointment with id {id} not found");
         }
-        
+
         return result;
     }
 
@@ -143,14 +144,15 @@ public class AppointmentsService(IConfiguration configuration) : IAppointmentsSe
 
         if (appointmentRequest.Reason.Length > 250)
         {
-            throw new ReasonTooLongException("The appointment reason is too long, length cannot be more than 250 characters");
+            throw new ReasonTooLongException(
+                "The appointment reason is too long, length cannot be more than 250 characters");
         }
-        
+
         await using var connection = new SqlConnection(configuration.GetConnectionString("Default"));
         await using var command = new SqlCommand();
-        
+
         await connection.OpenAsync(cancellationToken);
-        
+
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         command.Connection = connection;
         command.Transaction = (SqlTransaction)transaction;
@@ -214,19 +216,22 @@ public class AppointmentsService(IConfiguration configuration) : IAppointmentsSe
 
             // --------------------------------
 
-            command.CommandText = "SELECT 1 FROM ClinicAdoNet.dbo.Appointments WHERE IdDoctor = @IdDoctor AND AppointmentDate = @AppointmentDate AND Status != 'Cancelled'";
+            command.CommandText =
+                "SELECT 1 FROM ClinicAdoNet.dbo.Appointments WHERE IdDoctor = @IdDoctor AND AppointmentDate = @AppointmentDate AND Status != 'Cancelled'";
             command.Parameters.AddWithValue("@IdDoctor", appointmentRequest.IdDoctor);
             command.Parameters.AddWithValue("@AppointmentDate", appointmentRequest.AppointmentDate);
 
             var conflictExists = await command.ExecuteScalarAsync(cancellationToken);
             if (conflictExists is not null)
             {
-                throw new DateConflictException($"Doctor already has an appointment scheduled at {appointmentRequest.AppointmentDate}");
+                throw new DateConflictException(
+                    $"Doctor already has an appointment scheduled at {appointmentRequest.AppointmentDate}");
             }
+
             command.Parameters.Clear();
-            
+
             // --------------------------------
-            
+
             var status = "Scheduled";
             var createdAt = DateTime.Now;
 
@@ -265,6 +270,156 @@ public class AppointmentsService(IConfiguration configuration) : IAppointmentsSe
                 DoctorLastName = doctorLastName,
                 DoctorSpecializationName = doctorSpecializationName,
             };
+        }
+        catch (Exception)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task UpdateAsync(int id, UpdateRequestDto updateRequest, CancellationToken cancellationToken)
+    {
+        if (updateRequest.Reason is null || updateRequest.Reason.IsWhiteSpace())
+        {
+            throw new EmptyReasonException("The appointment reason must not be empty");
+        }
+
+        if (updateRequest.Reason.Length > 250)
+        {
+            throw new ReasonTooLongException(
+                "The appointment reason is too long, length cannot be more than 250 characters");
+        }
+
+        await using var connection = new SqlConnection(configuration.GetConnectionString("Default"));
+        await using var command = new SqlCommand();
+
+        await connection.OpenAsync(cancellationToken);
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        command.Connection = connection;
+        command.Transaction = (SqlTransaction)transaction;
+
+        try
+        {
+            command.CommandText = """
+                                  SELECT Status, AppointmentDate
+                                  FROM ClinicAdoNet.dbo.Appointments
+                                  WHERE IdAppointment = @id
+                                  """;
+            command.Parameters.AddWithValue("@id", id);
+
+            await using var appointmentReader = await command.ExecuteReaderAsync(cancellationToken);
+
+            if (!await appointmentReader.ReadAsync(cancellationToken))
+            {
+                throw new AppointmentNotFoundException($"Appointment with id: {id} not found");
+            }
+
+            string appointmentStatus = appointmentReader.GetString(appointmentReader.GetOrdinal("Status"));
+            DateTime appointmentDate = appointmentReader.GetDateTime(appointmentReader.GetOrdinal("AppointmentDate"));
+
+            if (appointmentStatus == "Completed" && appointmentDate != updateRequest.AppointmentDate)
+            {
+                throw new AppointmentAlreadyCompletedException("Appointment already completed");
+            }
+
+            await appointmentReader.CloseAsync();
+            command.Parameters.Clear();
+
+            // ----------------------------------
+
+            command.CommandText = """
+                                  SELECT IsActive 
+                                  FROM ClinicAdoNet.dbo.Patients 
+                                  WHERE IdPatient = @IdPatient
+                                  """;
+            command.Parameters.AddWithValue("@IdPatient", updateRequest.IdPatient);
+
+            await using var patientReader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await patientReader.ReadAsync(cancellationToken))
+            {
+                throw new PatientNotFoundException($"Patient with id: {updateRequest.IdPatient} not found");
+            }
+
+            bool patientIsActive = patientReader.GetBoolean(patientReader.GetOrdinal("IsActive"));
+
+            if (!patientIsActive)
+            {
+                throw new PatientNotActiveException($"Patient with id: {updateRequest.IdPatient} is not active");
+            }
+
+            await patientReader.CloseAsync();
+            command.Parameters.Clear();
+
+            // ------------------
+
+            command.CommandText = """
+                                  SELECT IsActive 
+                                  FROM ClinicAdoNet.dbo.Doctors 
+                                  WHERE IdDoctor = @IdDoctor
+                                  """;
+            command.Parameters.AddWithValue("@IdDoctor", updateRequest.IdDoctor);
+
+            await using var doctorReader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await doctorReader.ReadAsync(cancellationToken))
+            {
+                throw new DoctorNotFoundException($"Doctor with id: {updateRequest.IdDoctor} not found");
+            }
+
+            bool doctorIsActive = doctorReader.GetBoolean(doctorReader.GetOrdinal("IsActive"));
+
+            if (!doctorIsActive)
+            {
+                throw new DoctorNotActiveException($"Doctor with id: {updateRequest.IdDoctor} is not active");
+            }
+
+            await doctorReader.CloseAsync();
+            command.Parameters.Clear();
+            
+            // ------------------------------
+            
+            command.CommandText = """
+                                  SELECT 1 
+                                  FROM ClinicAdoNet.dbo.Appointments 
+                                  WHERE IdDoctor = @IdDoctor AND AppointmentDate = @AppointmentDate AND Status != 'Cancelled'
+                                  """;
+            command.Parameters.AddWithValue("@IdDoctor", updateRequest.IdDoctor);
+            command.Parameters.AddWithValue("@AppointmentDate", updateRequest.AppointmentDate);
+
+            var conflictExists = await command.ExecuteScalarAsync(cancellationToken);
+            if (conflictExists is not null && appointmentStatus == updateRequest.Status)
+            {
+                throw new DateConflictException(
+                    $"Doctor already has an appointment scheduled at {updateRequest.AppointmentDate}");
+            }
+
+            command.Parameters.Clear();
+
+            command.CommandText = """
+                                  UPDATE ClinicAdoNet.dbo.Appointments
+                                    SET
+                                      IdPatient = @IdPatient, 
+                                      IdDoctor = @IdDoctor, 
+                                      AppointmentDate = @AppointmentDate, 
+                                      Reason = @Reason, 
+                                      Status = @Status, 
+                                      InternalNotes = @InternalNotes
+                                    WHERE IdAppointment = @IdAppointment
+                                  """;
+
+            command.Parameters.AddWithValue("@IdPatient", updateRequest.IdPatient);
+            command.Parameters.AddWithValue("@IdDoctor", updateRequest.IdDoctor);
+            command.Parameters.AddWithValue("@AppointmentDate", updateRequest.AppointmentDate);
+            command.Parameters.AddWithValue("@Reason", updateRequest.Reason);
+            command.Parameters.AddWithValue("@Status", updateRequest.Status);
+            command.Parameters.AddWithValue("@InternalNotes", updateRequest.InternalNotes);
+            command.Parameters.AddWithValue("@IdAppointment", id);
+
+            var appointmentId = await command.ExecuteNonQueryAsync(cancellationToken);
+            command.Parameters.Clear();
+
+            await transaction.CommitAsync(cancellationToken);
         }
         catch (Exception)
         {
