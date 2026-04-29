@@ -35,4 +35,51 @@ public class AppointmentsController(IAppointmentsService appointmentsService) : 
             return NotFound(e.Message);
         }
     }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateAsync([FromBody] CreateAppointmentRequestDto appointmentRequest,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await appointmentsService.CreateAsync(appointmentRequest, cancellationToken);
+            return Created($"/api/appointments/{result.IdAppointment}", result);
+        } 
+        catch (DateInvalidException e)
+        {
+            return BadRequest(e.Message);
+        }
+        catch (EmptyReasonException e)
+        {
+            return BadRequest(e.Message);
+        }
+        catch (ReasonTooLongException e)
+        {
+            return BadRequest(e.Message);
+        }
+        catch (PatientNotFoundException e)
+        {
+            return BadRequest(e.Message);
+        }
+        catch (PatientNotActiveException e)
+        {
+            return BadRequest(e.Message);
+        }
+        catch (DoctorNotFoundException e)
+        {
+            return BadRequest(e.Message);
+        }
+        catch (DoctorNotActiveException e)
+        {
+            return BadRequest(e.Message);
+        }
+        catch (DateConflictException e)
+        {
+            return Conflict(e.Message);
+        }
+        catch (Exception)
+        {
+            return Problem("Internal server error");
+        }
+    }
 }

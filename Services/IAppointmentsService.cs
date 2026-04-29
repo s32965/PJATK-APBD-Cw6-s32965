@@ -8,4 +8,7 @@ public interface IAppointmentsService
         CancellationToken cancellationToken);
 
     Task<AppointmentDetailsDto> GetByIdAsync(int id, CancellationToken cancellationToken);
+
+    Task<AppointmentDetailsDto> CreateAsync(CreateAppointmentRequestDto appointmentRequest,
+        CancellationToken cancellationToken);
 }
