@@ -4,5 +4,6 @@ namespace WebApplication1.Services;
 
 public interface IAppointmentsService
 {
-    Task<IEnumerable<AppointmentListDto>> GetAllAsync(CancellationToken cancellationToken);
+    Task<IEnumerable<AppointmentListDto>> GetAllAsync(string? patientLastName, string? status,
+        CancellationToken cancellationToken);
 }
